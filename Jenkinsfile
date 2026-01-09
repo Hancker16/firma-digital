@@ -4,46 +4,81 @@ pipeline {
     options {
         skipDefaultCheckout(true)
         timestamps()
-        disableConcurrentBuilds() 
-        }
+        disableConcurrentBuilds()
+    }
 
     environment {
         BASE_TAG = "${BUILD_NUMBER}"
-        }
+    }
+
     triggers {
         GenericTrigger(
             genericVariables: [
-            [key: 'GIT_REF', value: '$.ref'],
-            [key: 'BRANCH', value: '$.ref'],
-            [key: 'COMMIT', value: '$.head_commit.id'],
-            [key: 'PUSHER', value: '$.pusher.name'],
-            [key: 'PR_SOURCE_BRANCH', value: '$.pull_request.head.ref'],
-            [key: 'PR_TARGET_BRANCH', value: '$.pull_request.base.ref'],
-            [key: 'EVENT_TYPE', value: '$.action']
+                // Rama (push)
+                [key: 'GIT_REF', value: '$.ref'],
+
+                // Autor (push/merge): autor del commit
+                [key: 'AUTHOR_NAME',  value: '$.head_commit.author.name'],
+                [key: 'AUTHOR_EMAIL', value: '$.head_commit.author.email'],
+
+                // Evento (no viene explícito como "push", se infiere)
+                // En PR sí viene $.action (opened/closed/synchronize)
+                [key: 'EVENT_ACTION', value: '$.action'],
+                // Si esto existe => es PR (pull_request)
+                [key: 'IS_PR', value: '$.pull_request.id'],
+                // Si es PR cerrado y merged=true => merge real
+                [key: 'PR_MERGED', value: '$.pull_request.merged'],
+
+                // Rama (PR)
+                [key: 'PR_SOURCE_BRANCH', value: '$.pull_request.head.ref'],
+                [key: 'PR_TARGET_BRANCH', value: '$.pull_request.base.ref']
             ],
             token: 'hava-jenkins-2026-9xQ2pL',
             printContributedVariables: false,
             printPostContent: false,
-            causeString: 'Push by $PUSHER'
+            causeString: 'GitHub event'
         )
     }
 
-
     stages {
+
+        stage('Resolve event context') {
+            steps {
+                script {
+                    // Detectar tipo de evento
+                    if (env.IS_PR?.trim()) {
+                        if (env.PR_MERGED?.toString() == 'true') {
+                            env.EVENT_TYPE = 'merge'
+                        } else {
+                            env.EVENT_TYPE = 'pull_request'
+                        }
+                        // Rama “principal” para el checkout en PR: usamos la source branch
+                        env.EFFECTIVE_REF = "refs/heads/${env.PR_SOURCE_BRANCH}"
+                    } else {
+                        env.EVENT_TYPE = 'push'
+                        env.EFFECTIVE_REF = env.GIT_REF ?: 'refs/heads/master'
+                    }
+
+                    // Normalizar nombre de rama (sin refs/heads/)
+                    env.BRANCH_NAME = (env.EFFECTIVE_REF ?: 'refs/heads/master').replace('refs/heads/', '')
+                }
+            }
+        }
+
         stage('Checkout') {
             steps {
                 echo '[INFO] Checkout del repositorio y limpieza de workspace...'
                 deleteDir()
 
                 script {
-                def branch = (env.GIT_REF ?: 'refs/heads/master').replace('refs/heads/', '')
-                echo "[INFO] Webhook branch = ${branch}"
+                    echo "[INFO] Event type      = ${env.EVENT_TYPE}"
+                    echo "[INFO] Branch detected = ${env.BRANCH_NAME}"
 
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${branch}"]],
-                    userRemoteConfigs: [[url: env.REPO_URL ?: scm.userRemoteConfigs[0].url ]]
-                ])
+                    checkout([
+                        $class: 'GitSCM',
+                        branches: [[name: "*/${env.BRANCH_NAME}"]],
+                        userRemoteConfigs: [[url: scm.userRemoteConfigs[0].url]]
+                    ])
                 }
 
                 sh 'rm -rf .scannerwork || true'
@@ -51,29 +86,28 @@ pipeline {
             }
         }
 
-
         stage('Load ci.properties') {
             steps {
                 script {
                     if (!fileExists('ci.properties')) {
-                    error "[ERROR] No se encontró el archivo ci.properties en la raíz del proyecto."
+                        error "[ERROR] No se encontró el archivo ci.properties en la raíz del proyecto."
                     }
-                def props = readProperties file: 'ci.properties'
+                    def props = readProperties file: 'ci.properties'
 
-                env.APP_NAME        = props.APP_NAME
-                env.APP_DIR         = props.APP_DIR
-                env.CONTAINER_NAME  = props.CONTAINER_NAME
+                    env.APP_NAME        = props.APP_NAME
+                    env.APP_DIR         = props.APP_DIR
+                    env.CONTAINER_NAME  = props.CONTAINER_NAME
 
-                env.DOCKER_NET      = props.DOCKER_NET
-                env.PUSH_REGISTRY   = props.PUSH_REGISTRY
+                    env.DOCKER_NET      = props.DOCKER_NET
+                    env.PUSH_REGISTRY   = props.PUSH_REGISTRY
 
-                env.APP_PORT        = props.APP_PORT
-                env.HOST_PORT       = props.HOST_PORT
+                    env.APP_PORT        = props.APP_PORT
+                    env.HOST_PORT       = props.HOST_PORT
 
-                env.SONAR_HOST_URL  = props.SONAR_HOST_URL
-                env.SONAR_PROJECT_KEY = props.SONAR_PROJECT_KEY
+                    env.SONAR_HOST_URL    = props.SONAR_HOST_URL
+                    env.SONAR_PROJECT_KEY = props.SONAR_PROJECT_KEY
 
-                env.SKIP_TESTS      = props.SKIP_TESTS
+                    env.SKIP_TESTS      = props.SKIP_TESTS
                 }
 
                 sh '''
@@ -124,11 +158,10 @@ pipeline {
                 echo "[OK] Version detectada: $VERSION"
                 '''
                 script {
-                env.APP_VERSION = readFile('.app_version').trim()
+                    env.APP_VERSION = readFile('.app_version').trim()
                 }
             }
         }
-
 
         stage('SonarQube Scan') {
             environment {
@@ -167,7 +200,6 @@ pipeline {
             }
         }
 
-
         stage('Quality Gate Result') {
             environment {
                 SONAR_TOKEN = credentials('sonar-token')
@@ -196,14 +228,14 @@ pipeline {
                     STATUS=$(echo "$JSON" | sed -n 's/.*"status":"\\([^"]*\\)".*/\\1/p' | head -n1)
 
                     if [ "$STATUS" = "SUCCESS" ]; then
-                    ANALYSIS_ID=$(echo "$JSON" | sed -n 's/.*"analysisId":"\\([^"]*\\)".*/\\1/p' | head -n1)
-                    break
+                        ANALYSIS_ID=$(echo "$JSON" | sed -n 's/.*"analysisId":"\\([^"]*\\)".*/\\1/p' | head -n1)
+                        break
                     fi
 
                     if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
-                    warn "Compute Engine terminó con status=$STATUS => qg-f"
-                    echo "qg-f" > .qg_tag
-                    exit 0
+                        warn "Compute Engine terminó con status=$STATUS => qg-f"
+                        echo "qg-f" > .qg_tag
+                        exit 0
                     fi
 
                     sleep 2
@@ -232,8 +264,6 @@ pipeline {
             }
         }
 
-
-
         stage('Docker Build Image') {
             steps {
                 sh '''
@@ -255,7 +285,7 @@ pipeline {
         stage('Push to Nexus (app image)') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'nexus-docker', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                sh '''
+                    sh '''
                     set -e
                     IMAGE=$(cat .image_name)
 
@@ -263,13 +293,13 @@ pipeline {
                     echo "$NEXUS_PASS" | docker login "$PUSH_REGISTRY" -u "$NEXUS_USER" --password-stdin >/dev/null 2>&1 || true
                     docker push "$IMAGE" >/dev/null 2>&1 || docker push "$IMAGE"
                     echo "[OK] Imagen subida => $IMAGE"
-                '''
+                    '''
                 }
             }
-        } 
+        }
 
         stage('Deploy docker') {
-            steps { 
+            steps {
                 sh '''
                 set -e
                 IMAGE=$(cat .image_name)
@@ -295,15 +325,15 @@ pipeline {
         stage('Debug variables') {
             steps {
                 sh '''
-                echo "Branch: $GIT_REF"
-                echo "Repo URL: $REPO_URL"
-                echo "Pusher: $PUSHER"
-                echo "Commit: $COMMIT"
+                echo "EVENT_TYPE      : $EVENT_TYPE"
+                echo "BRANCH (push)    : $GIT_REF"
+                echo "PR SOURCE BRANCH : $PR_SOURCE_BRANCH"
+                echo "PR TARGET BRANCH : $PR_TARGET_BRANCH"
+                echo "AUTHOR           : $AUTHOR_NAME <$AUTHOR_EMAIL>"
+                echo "EVENT_ACTION(PR) : $EVENT_ACTION"
+                echo "PR_MERGED        : $PR_MERGED"
                 '''
             }
         }
-
-
-
-  }
+    }
 }
