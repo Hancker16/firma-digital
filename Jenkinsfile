@@ -81,11 +81,11 @@ stage('SonarQube Scan') {
   steps {
     sh '''
       set -e
-      echo "[INFO] Build Maven (necesario para target/classes)..."
+      echo "[INFO] Build Maven..."
       chmod +x mvnw || true
       ./mvnw -B -DskipTests clean package
 
-      echo "[INFO] Ejecutando análisis SonarQube (sonar-scanner en Docker)..."
+      echo "[INFO] Ejecutando análisis SonarQube..."
       JENKINS_CID="$(hostname)"
 
       docker run --rm \
@@ -93,14 +93,18 @@ stage('SonarQube Scan') {
         --volumes-from "$JENKINS_CID" \
         -w /var/jenkins_home/jobs/firma_digital/workspace \
         sonarsource/sonar-scanner-cli:latest \
-        sonar-scanner -X \
+        sonar-scanner \
           -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
           -Dsonar.sources=src \
           -Dsonar.java.binaries=target/classes \
           -Dsonar.host.url="http://sonarqube:9000" \
-          -Dsonar.login="$SONAR_TOKEN"
+          -Dsonar.login="$SONAR_TOKEN" \
+          -Dsonar.working.directory=".scannerwork"
 
       echo "[OK] Scan enviado a SonarQube."
+      echo "[INFO] Verificando report-task.txt..."
+      ls -lah .scannerwork || true
+      test -f .scannerwork/report-task.txt
     '''
   }
 }
@@ -108,26 +112,71 @@ stage('SonarQube Scan') {
 
 
 
-    stage('Quality Gate') {
-        steps {
-            timeout(time: 10, unit: 'MINUTES') {
-                script {
-                    def qg = waitForQualityGate()
-                    echo "Quality Gate status: ${qg.status}"
+stage('Quality Gate Result') {
+  environment {
+    SONAR_TOKEN = credentials('sonar-token')
+  }
+  steps {
+    sh '''
+      set -e
 
-                    if (qg.status == 'OK') {
-                        sh ''' 
-                        echo "qg-p > .qg_tag" 
-                        '''
-                    } else {
-                        sh '''
-                         echo "qg-f > .qg_tag" 
-                         '''
-                    }
-                }
-            }
-        }
-    }
+      info(){ echo "[INFO] $*"; }
+      ok(){  echo "[OK]   $*"; }
+      warn(){ echo "[WARN] $*"; }
+
+      REPORT=".scannerwork/report-task.txt"
+      if [ ! -f "$REPORT" ]; then
+        warn "No existe $REPORT. Se marca como qg-f."
+        echo "qg-f" > .qg_tag
+        exit 0
+      fi
+
+      CE_TASK_URL=$(grep -E '^ceTaskUrl=' "$REPORT" | cut -d= -f2-)
+      info "Esperando procesamiento del reporte en Sonar..."
+      ANALYSIS_ID=""
+      STATUS=""
+
+      for i in $(seq 1 120); do
+        JSON=$(curl -s -u "$SONAR_TOKEN:" "$CE_TASK_URL")
+        STATUS=$(echo "$JSON" | sed -n 's/.*"status":"\\([^"]*\\)".*/\\1/p' | head -n1)
+
+        if [ "$STATUS" = "SUCCESS" ]; then
+          ANALYSIS_ID=$(echo "$JSON" | sed -n 's/.*"analysisId":"\\([^"]*\\)".*/\\1/p' | head -n1)
+          break
+        fi
+
+        if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
+          warn "Compute Engine terminó con status=$STATUS => qg-f"
+          echo "qg-f" > .qg_tag
+          exit 0
+        fi
+
+        sleep 2
+      done
+
+      if [ -z "$ANALYSIS_ID" ]; then
+        warn "Timeout esperando analysisId => qg-f"
+        echo "qg-f" > .qg_tag
+        exit 0
+      fi
+
+      QG_URL="http://sonarqube:9000/api/qualitygates/project_status?analysisId=$ANALYSIS_ID"
+      QG_JSON=$(curl -s -u "$SONAR_TOKEN:" "$QG_URL")
+      QG_STATUS=$(echo "$QG_JSON" | sed -n 's/.*"status":"\\([^"]*\\)".*/\\1/p' | head -n1)
+
+      info "Quality Gate: $QG_STATUS"
+
+      if [ "$QG_STATUS" = "OK" ]; then
+        ok "Quality Gate PASSED => qg-p"
+        echo "qg-p" > .qg_tag
+      else
+        warn "Quality Gate FAILED => qg-f"
+        echo "qg-f" > .qg_tag
+      fi
+    '''
+  }
+}
+
 
 
     stage('Docker Build Image') {
