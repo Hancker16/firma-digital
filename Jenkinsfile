@@ -73,28 +73,34 @@ pipeline {
         '''
       }
     }
-
+    
 stage('SonarQube Scan') {
   steps {
-    withSonarQubeEnv('sonar') {   // <-- usa aquí el NAME exacto de tu server en Jenkins
+    withSonarQubeEnv('sonar') {   // 👈 ESTE NOMBRE debe ser exactamente el de la UI
       sh '''
         set -e
-        echo "[INFO] Ejecutando análisis SonarQube (Docker sonar-scanner)..."
-
+        echo "[INFO] Build previo (necesario para Java)..."
         chmod +x mvnw || true
         ./mvnw -B -DskipTests clean package
 
+        echo "[INFO] Ejecutando SonarScanner contra $SONAR_HOST_URL"
         JENKINS_CID="$(hostname)"
 
         docker run --rm \
           --network "$DOCKER_NET" \
           --volumes-from "$JENKINS_CID" \
           -w /var/jenkins_home/jobs/firma_digital/workspace \
+          -e SONAR_HOST_URL="$SONAR_HOST_URL" \
+          -e SONAR_AUTH_TOKEN="$SONAR_AUTH_TOKEN" \
           sonarsource/sonar-scanner-cli:latest \
           sonar-scanner \
             -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
             -Dsonar.sources=src \
-            -Dsonar.java.binaries=target/classes
+            -Dsonar.java.binaries=target/classes \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_AUTH_TOKEN"
+
+        echo "[OK] Scan enviado a SonarQube."
       '''
     }
   }
