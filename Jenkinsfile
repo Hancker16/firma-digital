@@ -74,34 +74,39 @@ pipeline {
       }
     }
 
-    stage('SonarQube Scan') {
-        environment {
-            SONAR_TOKEN = credentials('sonar-token')
-            }
-            steps {
-                sh '''
-                set -e
-                echo "[INFO] SonarQube Scan (CLI)..."
-                chmod +x mvnw || true
-                ./mvnw -B -DskipTests clean package
+stage('SonarQube Scan') {
+  environment {
+    SONAR_TOKEN = credentials('sonar-token')
+  }
+  steps {
+    sh '''
+      set -e
+      echo "[INFO] Ejecutando análisis SonarQube (Docker sonar-scanner)..."
 
-                # Descarga sonar-scanner (si no lo tienes instalado)
-                if ! command -v sonar-scanner >/dev/null 2>&1; then
-                    echo "[INFO] Instalando sonar-scanner..."
-                    curl -sSLo /tmp/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
-                    unzip -q /tmp/sonar-scanner.zip -d /tmp
-                    export PATH="/tmp/sonar-scanner-5.0.1.3006-linux/bin:$PATH"
-                fi
+      # Asegura build previo (necesario para target/classes)
+      chmod +x mvnw || true
+      ./mvnw -B -DskipTests clean package
 
-                sonar-scanner \
-                    -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-                    -Dsonar.sources=src \
-                    -Dsonar.java.binaries=target/classes \
-                    -Dsonar.host.url="$SONAR_HOST_URL" \
-                    -Dsonar.token="$SONAR_TOKEN"
-                '''
-                }
-    }
+      JENKINS_CID="$(hostname)"
+
+      docker run --rm \
+        --network "$DOCKER_NET" \
+        --volumes-from "$JENKINS_CID" \
+        -w /var/jenkins_home/jobs/firma_digital/workspace \
+        -e SONAR_TOKEN="$SONAR_TOKEN" \
+        sonarsource/sonar-scanner-cli:latest \
+        sonar-scanner \
+          -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+          -Dsonar.sources=src \
+          -Dsonar.java.binaries=target/classes \
+          -Dsonar.host.url="$SONAR_HOST_URL" \
+          -Dsonar.token="$SONAR_TOKEN"
+
+      echo "[OK] Scan enviado a SonarQube."
+    '''
+  }
+}
+
 
     stage('Quality Gate') {
         steps {
