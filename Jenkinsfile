@@ -100,7 +100,7 @@ stage('SonarQube Scan') {
           -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
           -Dsonar.sources=src \
           -Dsonar.java.binaries=target/classes \
-          -Dsonar.host.url="http://sonarqube:9000" \
+          -Dsonar.host.url="$SONAR_HOST_URL" \
           -Dsonar.login="$SONAR_TOKEN" \
           -Dsonar.working.directory=".scannerwork"
 
@@ -159,7 +159,7 @@ stage('Quality Gate Result') {
         exit 0
       fi
 
-      QG_URL="http://sonarqube:9000/api/qualitygates/project_status?analysisId=$ANALYSIS_ID"
+      QG_URL="$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$ANALYSIS_ID"
       QG_JSON=$(curl -s -u "$SONAR_TOKEN:" "$QG_URL")
       QG_STATUS=$(echo "$QG_JSON" | sed -n 's/.*"status":"\\([^"]*\\)".*/\\1/p' | head -n1)
 
