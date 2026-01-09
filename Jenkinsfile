@@ -279,7 +279,7 @@ pipeline {
             steps {
                 // Para mostrar todas las variables en la consola
                 echo '--- Variables de Entorno ---'
-                sh ' ${env.BRANCH_NAME}'
+                echo "Branch Name (env.BRANCH_NAME): ${env.BRANCH_NAME}"
             }
         }
 
