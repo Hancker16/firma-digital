@@ -103,20 +103,22 @@ pipeline {
     }
 
     stage('Quality Gate') {
-    steps {
-        timeout(time: 10, unit: 'MINUTES') {
-        script {
-            def qg = waitForQualityGate()
-            echo "Quality Gate status: ${qg.status}"
-            if (qg.status != 'OK') {
-            echo "qg-f" > .qg_tag
-            } else {
-            echo "qg-p" > .qg_tag
+        steps {
+            timeout(time: 10, unit: 'MINUTES') {
+                script {
+                    def qg = waitForQualityGate()
+                    echo "Quality Gate status: ${qg.status}"
+
+                    if (qg.status == 'OK') {
+                        sh 'echo qg-p > .qg_tag'
+                    } else {
+                        sh 'echo qg-f > .qg_tag'
+                    }
+                }
             }
         }
-        }
     }
-    }
+
 +
     stage('Docker Build Image') {
       steps {
