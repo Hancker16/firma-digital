@@ -10,6 +10,24 @@ pipeline {
     environment {
         BASE_TAG = "${BUILD_NUMBER}"
         }
+    triggers {
+        GenericTrigger(
+            genericVariables: [
+            [key: 'GIT_REF', value: '$.ref'],
+            [key: 'BRANCH', value: '$.ref'],
+            [key: 'COMMIT', value: '$.head_commit.id'],
+            [key: 'PUSHER', value: '$.pusher.name'],
+            [key: 'PR_SOURCE_BRANCH', value: '$.pull_request.head.ref'],
+            [key: 'PR_TARGET_BRANCH', value: '$.pull_request.base.ref'],
+            [key: 'EVENT_TYPE', value: '$.action']
+            ],
+            token: 'hava-jenkins-2026-9xQ2pL',
+            printContributedVariables: false,
+            printPostContent: false,
+            causeString: 'Push by $PUSHER'
+        )
+    }
+
 
     stages {
         stage('Checkout') {
