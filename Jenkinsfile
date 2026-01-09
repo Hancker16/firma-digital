@@ -73,7 +73,6 @@ pipeline {
         '''
       }
     }
-
 stage('SonarQube Scan') {
   environment {
     SONAR_TOKEN = credentials('sonar-token')
@@ -81,14 +80,18 @@ stage('SonarQube Scan') {
   steps {
     sh '''
       set -e
-      echo "[INFO] Build Maven..."
       chmod +x mvnw || true
       ./mvnw -B -DskipTests clean package
 
-      echo "[INFO] Ejecutando análisis SonarQube..."
+      echo "[INFO] Preparando carpeta .scannerwork..."
+      rm -rf .scannerwork || true
+      mkdir -p .scannerwork
+      chmod -R 777 .scannerwork || true
+
       JENKINS_CID="$(hostname)"
 
       docker run --rm \
+        --user 0:0 \
         --network "$DOCKER_NET" \
         --volumes-from "$JENKINS_CID" \
         -w /var/jenkins_home/jobs/firma_digital/workspace \
@@ -101,15 +104,11 @@ stage('SonarQube Scan') {
           -Dsonar.login="$SONAR_TOKEN" \
           -Dsonar.working.directory=".scannerwork"
 
-      echo "[OK] Scan enviado a SonarQube."
-      echo "[INFO] Verificando report-task.txt..."
-      ls -lah .scannerwork || true
       test -f .scannerwork/report-task.txt
+      echo "[OK] Scan enviado a SonarQube."
     '''
   }
 }
-
-
 
 
 stage('Quality Gate Result') {
