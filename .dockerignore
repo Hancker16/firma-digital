@@ -1,0 +1,25 @@
+# Git / IDE
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+*.iml
+
+# Maven / Java build
+target
+**/target
+*.log
+
+# Sonar
+.scannerwork
+
+# Node / frontend (si existiera)
+node_modules
+
+# Archivos locales / runtime
+uploads
+*.pdf
+
+# Otros
+.DS_Store
