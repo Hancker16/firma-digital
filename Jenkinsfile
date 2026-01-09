@@ -1,17 +1,14 @@
 pipeline {
-  agent any
-
-  options {
-    skipDefaultCheckout(true)
-    timestamps()
-  }
-
-  environment {
-    BASE_TAG = "${BUILD_NUMBER}"
-  }
-
-  stages {
-
+    agent any
+    
+    options {
+        skipDefaultCheckout(true)
+        timestamps()
+        }
+    environment {
+        BASE_TAG = "${BUILD_NUMBER}"
+        }
+    stages {
     stage('Checkout') {
       steps {
         echo '[INFO] Checkout del repositorio y limpieza de workspace...'
@@ -76,90 +73,51 @@ pipeline {
       }
     }
 
-    stage('SonarQube Scan (Maven)') {
-      environment {
-        SONAR_TOKEN = credentials('sonar-token')
-      }
-      steps {
-        sh '''
-          set -e
-          echo "[INFO] Ejecutando análisis SonarQube con Maven..."
-          ./mvnw -B sonar:sonar \
-            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-            -Dsonar.host.url="$SONAR_HOST_URL" \
-            -Dsonar.login="$SONAR_TOKEN"
-          echo "[OK] Scan enviado a SonarQube."
-        '''
-      }
+    stage('SonarQube Scan') {
+        environment {
+            SONAR_TOKEN = credentials('sonar-token')
+            }
+            steps {
+                sh '''
+                set -e
+                echo "[INFO] SonarQube Scan (CLI)..."
+                chmod +x mvnw || true
+                ./mvnw -B -DskipTests clean package
+
+                # Descarga sonar-scanner (si no lo tienes instalado)
+                if ! command -v sonar-scanner >/dev/null 2>&1; then
+                    echo "[INFO] Instalando sonar-scanner..."
+                    curl -sSLo /tmp/sonar-scanner.zip https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-5.0.1.3006-linux.zip
+                    unzip -q /tmp/sonar-scanner.zip -d /tmp
+                    export PATH="/tmp/sonar-scanner-5.0.1.3006-linux/bin:$PATH"
+                fi
+
+                sonar-scanner \
+                    -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+                    -Dsonar.sources=src \
+                    -Dsonar.java.binaries=target/classes \
+                    -Dsonar.host.url="$SONAR_HOST_URL" \
+                    -Dsonar.token="$SONAR_TOKEN"
+                '''
+                }
     }
 
-    stage('Quality Gate Result') {
-      environment {
-        SONAR_TOKEN = credentials('sonar-token')
-      }
-      steps {
-        sh '''
-          set -e
-
-          info(){ echo "[INFO] $*"; }
-          ok(){  echo "[OK]   $*"; }
-          warn(){ echo "[WARN] $*"; }
-
-          REPORT=".scannerwork/report-task.txt"
-          if [ ! -f "$REPORT" ]; then
-            warn "No existe $REPORT. Se marca como qg-f (fallo/indeterminado)."
+    stage('Quality Gate') {
+    steps {
+        timeout(time: 10, unit: 'MINUTES') {
+        script {
+            def qg = waitForQualityGate()
+            echo "Quality Gate status: ${qg.status}"
+            if (qg.status != 'OK') {
             echo "qg-f" > .qg_tag
-            exit 0
-          fi
-
-          CE_TASK_URL=$(grep -E '^ceTaskUrl=' "$REPORT" | cut -d= -f2-)
-          info "Esperando resultado del análisis en Sonar (Compute Engine)..."
-
-          ANALYSIS_ID=""
-          STATUS=""
-
-          for i in $(seq 1 120); do
-            JSON=$(curl -s -u "$SONAR_TOKEN:" "$CE_TASK_URL")
-            STATUS=$(echo "$JSON" | sed -n 's/.*"status":"\\([^"]*\\)".*/\\1/p' | head -n1)
-
-            if [ "$STATUS" = "SUCCESS" ]; then
-              ANALYSIS_ID=$(echo "$JSON" | sed -n 's/.*"analysisId":"\\([^"]*\\)".*/\\1/p' | head -n1)
-              break
-            fi
-
-            if [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELED" ]; then
-              warn "Compute Engine terminó con status=$STATUS => qg-f"
-              echo "qg-f" > .qg_tag
-              exit 0
-            fi
-
-            sleep 2
-          done
-
-          if [ -z "$ANALYSIS_ID" ]; then
-            warn "Timeout esperando analysisId => qg-f"
-            echo "qg-f" > .qg_tag
-            exit 0
-          fi
-
-          info "analysisId obtenido: $ANALYSIS_ID"
-          QG_URL="$SONAR_HOST_URL/api/qualitygates/project_status?analysisId=$ANALYSIS_ID"
-          QG_JSON=$(curl -s -u "$SONAR_TOKEN:" "$QG_URL")
-          QG_STATUS=$(echo "$QG_JSON" | sed -n 's/.*"status":"\\([^"]*\\)".*/\\1/p' | head -n1)
-
-          info "Quality Gate: $QG_STATUS"
-
-          if [ "$QG_STATUS" = "OK" ]; then
-            ok "Quality Gate PASSED => qg-p"
+            } else {
             echo "qg-p" > .qg_tag
-          else
-            warn "Quality Gate FAILED => qg-f"
-            echo "qg-f" > .qg_tag
-          fi
-        '''
-      }
+            }
+        }
+        }
     }
-
+    }
++
     stage('Docker Build Image') {
       steps {
         sh '''
@@ -219,3 +177,4 @@ pipeline {
     }
   }
 }
+
