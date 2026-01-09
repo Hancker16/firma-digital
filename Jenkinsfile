@@ -152,7 +152,7 @@ pipeline {
           '''
         }
       }
-    }
+    } 
 
     stage('Deploy docker') {
       steps {
