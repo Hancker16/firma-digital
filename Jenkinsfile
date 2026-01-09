@@ -261,5 +261,17 @@ pipeline {
                 '''
             }
         }
+
+        stage('Todos el json del webhook de github') {
+            steps {
+                sh '''
+                set -e
+                echo "[INFO] Mostrando el JSON del webhook de GitHub..."
+                echo "$GITHUB_WEBHOOK_PAYLOAD" || true
+                echo "[OK] JSON mostrado."
+                '''
+            }
+
+        }
   }
 }
