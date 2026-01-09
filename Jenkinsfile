@@ -17,51 +17,60 @@ pipeline {
                 // Rama (push)
                 [key: 'GIT_REF', value: '$.ref'],
 
-                // Autor (push/merge): autor del commit
+                // Autor (push): en push viene en head_commit.author
                 [key: 'AUTHOR_NAME',  value: '$.head_commit.author.name'],
                 [key: 'AUTHOR_EMAIL', value: '$.head_commit.author.email'],
 
-                // Evento (no viene explícito como "push", se infiere)
-                // En PR sí viene $.action (opened/closed/synchronize)
-                [key: 'EVENT_ACTION', value: '$.action'],
-                // Si esto existe => es PR (pull_request)
-                [key: 'IS_PR', value: '$.pull_request.id'],
-                // Si es PR cerrado y merged=true => merge real
-                [key: 'PR_MERGED', value: '$.pull_request.merged'],
-
-                // Rama (PR)
+                // PR data (solo existe en pull_request)
                 [key: 'PR_SOURCE_BRANCH', value: '$.pull_request.head.ref'],
-                [key: 'PR_TARGET_BRANCH', value: '$.pull_request.base.ref']
+                [key: 'PR_TARGET_BRANCH', value: '$.pull_request.base.ref'],
+                [key: 'PR_MERGED',        value: '$.pull_request.merged'],
+                [key: 'PR_ACTION',        value: '$.action'],
+
+                // Bandera: si existe pull_request.id => es PR
+                [key: 'IS_PR', value: '$.pull_request.id']
             ],
             token: 'hava-jenkins-2026-9xQ2pL',
             printContributedVariables: false,
             printPostContent: false,
-            causeString: 'GitHub event'
+            causeString: 'GitHub webhook'
         )
     }
 
     stages {
 
-        stage('Resolve event context') {
+        stage('Detect event + debug (early)') {
             steps {
                 script {
-                    // Detectar tipo de evento
-                    if (env.IS_PR?.trim()) {
-                        if (env.PR_MERGED?.toString() == 'true') {
-                            env.EVENT_TYPE = 'merge'
-                        } else {
-                            env.EVENT_TYPE = 'pull_request'
-                        }
-                        // Rama “principal” para el checkout en PR: usamos la source branch
-                        env.EFFECTIVE_REF = "refs/heads/${env.PR_SOURCE_BRANCH}"
+                // Tipo de evento
+                if (env.IS_PR?.trim()) {
+                    if (env.PR_MERGED?.toString() == 'true') {
+                    env.EVENT_TYPE = 'merge'
                     } else {
-                        env.EVENT_TYPE = 'push'
-                        env.EFFECTIVE_REF = env.GIT_REF ?: 'refs/heads/master'
+                    env.EVENT_TYPE = 'pull_request'
                     }
-
-                    // Normalizar nombre de rama (sin refs/heads/)
-                    env.BRANCH_NAME = (env.EFFECTIVE_REF ?: 'refs/heads/master').replace('refs/heads/', '')
+                } else {
+                    env.EVENT_TYPE = 'push'
                 }
+
+                // Rama “legible”
+                env.BRANCH_NAME = (env.GIT_REF ?: (env.PR_TARGET_BRANCH ? "refs/heads/${env.PR_TARGET_BRANCH}" : "refs/heads/master"))
+                    .replace('refs/heads/', '')
+                }
+
+                sh '''
+                echo "EVENT_TYPE     : $EVENT_TYPE"
+                echo "BRANCH_NAME    : $BRANCH_NAME"
+                echo "GIT_REF(push)  : $GIT_REF"
+                echo "AUTHOR         : $AUTHOR_NAME <$AUTHOR_EMAIL>"
+
+                if [ -n "$IS_PR" ]; then
+                    echo "PR_ACTION      : $PR_ACTION"
+                    echo "PR_SOURCE      : $PR_SOURCE_BRANCH"
+                    echo "PR_TARGET      : $PR_TARGET_BRANCH"
+                    echo "PR_MERGED      : $PR_MERGED"
+                fi
+                '''
             }
         }
 
@@ -318,20 +327,6 @@ pipeline {
 
                 echo "[OK] Deploy completado. URL: http://localhost:${HOST_PORT}"
                 docker ps --filter "name=$CONTAINER_NAME"
-                '''
-            }
-        }
-
-        stage('Debug variables') {
-            steps {
-                sh '''
-                echo "EVENT_TYPE      : $EVENT_TYPE"
-                echo "BRANCH (push)    : $GIT_REF"
-                echo "PR SOURCE BRANCH : $PR_SOURCE_BRANCH"
-                echo "PR TARGET BRANCH : $PR_TARGET_BRANCH"
-                echo "AUTHOR           : $AUTHOR_NAME <$AUTHOR_EMAIL>"
-                echo "EVENT_ACTION(PR) : $EVENT_ACTION"
-                echo "PR_MERGED        : $PR_MERGED"
                 '''
             }
         }
