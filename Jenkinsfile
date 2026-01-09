@@ -76,6 +76,30 @@ pipeline {
             }
         }
 
+        stage('Read Version (pom.xml)') {
+            steps {
+                sh '''
+                set -e
+                chmod +x ./mvnw || true
+
+                echo "[INFO] Leyendo version desde pom.xml..."
+                VERSION=$(./mvnw -q -DforceStdout help:evaluate -Dexpression=project.version | tr -d '\\r' | tail -n 1)
+
+                if [ -z "$VERSION" ]; then
+                    echo "[ERROR] No se pudo obtener la versión del pom.xml"
+                    exit 1
+                fi
+
+                echo "$VERSION" > .app_version
+                echo "[OK] Version detectada: $VERSION"
+                '''
+                script {
+                env.APP_VERSION = readFile('.app_version').trim()
+                }
+            }
+        }
+
+
         stage('SonarQube Scan') {
             environment {
                 SONAR_TOKEN = credentials('sonar-token')
@@ -184,8 +208,8 @@ pipeline {
             steps {
                 sh '''
                 set -e
-                QG_TAG=$(cat .qg_tag)
-                IMAGE="${PUSH_REGISTRY}/${APP_NAME}:${BASE_TAG}-${QG_TAG}"
+
+                IMAGE="${PUSH_REGISTRY}/${APP_NAME}:${APP_VERSION}-dev-${BASE_TAG}"
 
                 echo "[INFO] Construyendo imagen final..."
                 echo "[INFO] Tag final => $IMAGE"
