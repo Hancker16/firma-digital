@@ -10,44 +10,43 @@ pipeline {
     environment {
         BASE_TAG = "${BUILD_NUMBER}"
         }
-
-    triggers {
-    GenericTrigger(
-        genericVariables: [
-        [key: 'GIT_REF',  value: '$.ref'],
-        [key: 'REPO_URL', value: '$.repository.clone_url'],
-        [key: 'COMMIT',   value: '$.head_commit.id'],
-        [key: 'PUSHER',   value: '$.pusher.name']
-        ],
-        token: 'hava-jenkins-2026-9xQ2pL',
-        printContributedVariables: true,
-        printPostContent: false,   
-        causeString: 'Push by $PUSHER'
-    )
-    }
+triggers {
+  GenericTrigger(
+    genericVariables: [
+      [key: 'GIT_REF', value: '$.ref'],
+      [key: 'REPO_URL', value: '$.repository.clone_url'],
+      [key: 'COMMIT', value: '$.head_commit.id'],
+      [key: 'PUSHER', value: '$.pusher.name']
+    ],
+    token: 'hava-jenkins-2026-9xQ2pL',
+    printContributedVariables: true,
+    printPostContent: true,
+    causeString: 'Push by $PUSHER'
+  )
+}
 
 
     stages {
-        stage('Checkout') {
-            steps {
-                echo '[INFO] Checkout del repositorio y limpieza de workspace...'
-                deleteDir()
+stage('Checkout') {
+  steps {
+    echo '[INFO] Checkout del repositorio y limpieza de workspace...'
+    deleteDir()
 
-                script {
-                def branch = (env.GIT_REF ?: 'refs/heads/master').replace('refs/heads/', '')
-                echo "[INFO] Webhook branch = ${branch}"
+    script {
+      def branch = (env.GIT_REF ?: 'refs/heads/master').replace('refs/heads/', '')
+      echo "[INFO] Webhook branch = ${branch}"
 
-                checkout([
-                    $class: 'GitSCM',
-                    branches: [[name: "*/${branch}"]],
-                    userRemoteConfigs: [[url: env.REPO_URL ?: scm.userRemoteConfigs[0].url ]]
-                ])
-                }
+      checkout([
+        $class: 'GitSCM',
+        branches: [[name: "*/${branch}"]],
+        userRemoteConfigs: [[url: env.REPO_URL ?: scm.userRemoteConfigs[0].url ]]
+      ])
+    }
 
-                sh 'rm -rf .scannerwork || true'
-                echo '[OK] Código listo.'
-            }
-        }
+    sh 'rm -rf .scannerwork || true'
+    echo '[OK] Código listo.'
+  }
+}
 
 
         stage('Load ci.properties') {
@@ -290,16 +289,18 @@ pipeline {
             }
         }
 
-        stage('Debug variables') {
-            steps {
-                sh '''
-                echo "Branch: $GIT_REF"
-                echo "Repo URL: $REPO_URL"
-                echo "Pusher: $PUSHER"
-                echo "Commit: $COMMIT"
-                '''
-            }
-        }
+stage('Debug variables') {
+  steps {
+    sh '''
+      echo "Branch: $GIT_REF"
+      echo "Repo URL: $REPO_URL"
+      echo "Pusher: $PUSHER"
+      echo "Commit: $COMMIT"
+    '''
+  }
+}
+
+
 
   }
 }
