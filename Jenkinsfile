@@ -61,6 +61,9 @@ pipeline {
       steps {
         sh '''
           set -e
+          echo "[INFO] Permisos de ejecución para mvnw..."
+          chmod +x ./mvnw || true
+
           echo "[INFO] Build Maven..."
           if [ "$SKIP_TESTS" = "true" ]; then
             ./mvnw -B -DskipTests clean package
