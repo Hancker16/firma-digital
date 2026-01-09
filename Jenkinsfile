@@ -25,6 +25,9 @@ pipeline {
     stage('Load ci.properties') {
       steps {
         script {
+            if (!fileExists('ci.properties')) {
+              error "[ERROR] No se encontró el archivo ci.properties en la raíz del proyecto."
+            }
           def props = readProperties file: 'ci.properties'
 
           env.APP_NAME        = props.APP_NAME
