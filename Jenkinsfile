@@ -11,6 +11,22 @@ pipeline {
         BASE_TAG = "${BUILD_NUMBER}"
         }
 
+    triggers {
+    GenericTrigger(
+        genericVariables: [
+        [key: 'GIT_REF',  value: '$.ref'],
+        [key: 'REPO_URL', value: '$.repository.clone_url'],
+        [key: 'COMMIT',   value: '$.head_commit.id'],
+        [key: 'PUSHER',   value: '$.pusher.name']
+        ],
+        token: 'hava-jenkins-2026-9xQ2pL',
+        printContributedVariables: true,
+        printPostContent: false,   // ✅ NO imprime el JSON completo
+        causeString: 'Push by $PUSHER'
+    )
+    }
+
+
     stages {
         stage('Checkout') {
             steps {
