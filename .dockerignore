@@ -16,8 +16,8 @@
 node_modules
 
 # Archivos locales / runtime
-uploads
-*.pdf
+#uploads
+#*.pdf
 
 # Otros
 .DS_Store
