@@ -7,8 +7,6 @@
 *.iml
 
 # Maven / Java build
-target
-**/target
 *.log
 
 # Sonar
