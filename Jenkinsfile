@@ -75,37 +75,31 @@ pipeline {
     }
 
 stage('SonarQube Scan') {
-  environment {
-    SONAR_TOKEN = credentials('sonar-token')
-  }
   steps {
-    sh '''
-      set -e
-      echo "[INFO] Ejecutando análisis SonarQube (Docker sonar-scanner)..."
+    withSonarQubeEnv('sonar') {   // <-- usa aquí el NAME exacto de tu server en Jenkins
+      sh '''
+        set -e
+        echo "[INFO] Ejecutando análisis SonarQube (Docker sonar-scanner)..."
 
-      # Asegura build previo (necesario para target/classes)
-      chmod +x mvnw || true
-      ./mvnw -B -DskipTests clean package
+        chmod +x mvnw || true
+        ./mvnw -B -DskipTests clean package
 
-      JENKINS_CID="$(hostname)"
+        JENKINS_CID="$(hostname)"
 
-      docker run --rm \
-        --network "$DOCKER_NET" \
-        --volumes-from "$JENKINS_CID" \
-        -w /var/jenkins_home/jobs/firma_digital/workspace \
-        -e SONAR_TOKEN="$SONAR_TOKEN" \
-        sonarsource/sonar-scanner-cli:latest \
-        sonar-scanner \
-          -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
-          -Dsonar.sources=src \
-          -Dsonar.java.binaries=target/classes \
-          -Dsonar.host.url="$SONAR_HOST_URL" \
-          -Dsonar.token="$SONAR_TOKEN"
-
-      echo "[OK] Scan enviado a SonarQube."
-    '''
+        docker run --rm \
+          --network "$DOCKER_NET" \
+          --volumes-from "$JENKINS_CID" \
+          -w /var/jenkins_home/jobs/firma_digital/workspace \
+          sonarsource/sonar-scanner-cli:latest \
+          sonar-scanner \
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+            -Dsonar.sources=src \
+            -Dsonar.java.binaries=target/classes
+      '''
+    }
   }
 }
+
 
 
     stage('Quality Gate') {
