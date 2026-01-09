@@ -266,7 +266,7 @@ stage('Checkout') {
         } 
 
         stage('Deploy docker') {
-            steps {
+            steps { 
                 sh '''
                 set -e
                 IMAGE=$(cat .image_name)
