@@ -17,19 +17,10 @@ pipeline {
                 echo '[INFO] Checkout del repositorio y limpieza de workspace...'
                 deleteDir()
                 checkout scm
-
                 sh '''
-      echo "===== SCM INFO (después del checkout) ====="
-      echo "GIT_BRANCH=$GIT_BRANCH"
-      echo "GIT_COMMIT=$GIT_COMMIT"
-      echo "GIT_URL=$GIT_URL"
-      echo "BRANCH_NAME=$BRANCH_NAME"
-      echo "CHANGE_ID=$CHANGE_ID"
-      echo "=========================================="
-      git rev-parse HEAD || true
-      git log -1 --oneline || true
-      git remote -v || true
-    '''
+                echo "env: ${env.getEnvironment()}"
+                '''
+
                 sh 'rm -rf .scannerwork || true'
                 echo '[OK] Código listo.'
             }
