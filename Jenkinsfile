@@ -10,17 +10,44 @@ pipeline {
     environment {
         BASE_TAG = "${BUILD_NUMBER}"
         }
+triggers {
+  GenericTrigger(
+    genericVariables: [
+      [key: 'GIT_REF', value: '$.ref'],
+      [key: 'REPO_URL', value: '$.repository.clone_url'],
+      [key: 'COMMIT', value: '$.head_commit.id'],
+      [key: 'PUSHER', value: '$.pusher.name']
+    ],
+    token: 'hava-jenkins-2026-9xQ2pL',
+    printContributedVariables: true,
+    printPostContent: true,
+    causeString: 'Push by $PUSHER'
+  )
+}
+
 
     stages {
-        stage('Checkout') {
-            steps {
-                echo '[INFO] Checkout del repositorio y limpieza de workspace...'
-                deleteDir()
-                checkout scm
-                sh 'rm -rf .scannerwork || true'
-                echo '[OK] Código listo.'
-            }
-        }
+stage('Checkout') {
+  steps {
+    echo '[INFO] Checkout del repositorio y limpieza de workspace...'
+    deleteDir()
+
+    script {
+      def branch = (env.GIT_REF ?: 'refs/heads/master').replace('refs/heads/', '')
+      echo "[INFO] Webhook branch = ${branch}"
+
+      checkout([
+        $class: 'GitSCM',
+        branches: [[name: "*/${branch}"]],
+        userRemoteConfigs: [[url: env.REPO_URL ?: scm.userRemoteConfigs[0].url ]]
+      ])
+    }
+
+    sh 'rm -rf .scannerwork || true'
+    echo '[OK] Código listo.'
+  }
+}
+
 
         stage('Load ci.properties') {
             steps {
@@ -262,25 +289,7 @@ pipeline {
             }
         }
 
-  triggers {
-    GenericTrigger(
-      genericVariables: [
-        [key: 'GIT_REF', value: '$.ref'],
-        [key: 'REPO_NAME', value: '$.repository.name'],
-        [key: 'REPO_URL', value: '$.repository.clone_url'],
-        [key: 'PUSHER', value: '$.pusher.name'],
-        [key: 'COMMIT_ID', value: '$.head_commit.id'],
-        [key: 'COMMIT_MSG', value: '$.head_commit.message']
-      ],
-      causeString: 'Push by $PUSHER on $REPO_NAME',
-      token: 'mi-token-secreto',
-      printContributedVariables: true,
-      printPostContent: true
-    )
-  }
-
-  stages {
-    stage('Debug variables') {
+            stage('Debug variables') {
       steps {
         sh '''
           echo "Branch: $GIT_REF"
@@ -292,8 +301,6 @@ pipeline {
         '''
       }
     }
-  }
-}
 
 
   }
