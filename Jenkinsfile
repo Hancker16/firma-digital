@@ -17,10 +17,6 @@ pipeline {
                 echo '[INFO] Checkout del repositorio y limpieza de workspace...'
                 deleteDir()
                 checkout scm
-                sh '''
-                echo "env: ${env.getEnvironment()}"
-                '''
-
                 sh 'rm -rf .scannerwork || true'
                 echo '[OK] Código listo.'
             }
@@ -266,13 +262,38 @@ pipeline {
             }
         }
 
-        stage('Listar Variables') {
-            steps {
-                // Para mostrar todas las variables en la consola
-                echo '--- Variables de Entorno ---'
-                sh 'env'
-            }
-        }
+  triggers {
+    GenericTrigger(
+      genericVariables: [
+        [key: 'GIT_REF', value: '$.ref'],
+        [key: 'REPO_NAME', value: '$.repository.name'],
+        [key: 'REPO_URL', value: '$.repository.clone_url'],
+        [key: 'PUSHER', value: '$.pusher.name'],
+        [key: 'COMMIT_ID', value: '$.head_commit.id'],
+        [key: 'COMMIT_MSG', value: '$.head_commit.message']
+      ],
+      causeString: 'Push by $PUSHER on $REPO_NAME',
+      token: 'mi-token-secreto',
+      printContributedVariables: true,
+      printPostContent: true
+    )
+  }
+
+  stages {
+    stage('Debug variables') {
+      steps {
+        sh '''
+          echo "Branch: $GIT_REF"
+          echo "Repo: $REPO_NAME"
+          echo "URL: $REPO_URL"
+          echo "Pusher: $PUSHER"
+          echo "Commit: $COMMIT_ID"
+          echo "Mensaje: $COMMIT_MSG"
+        '''
+      }
+    }
+  }
+}
 
 
   }
