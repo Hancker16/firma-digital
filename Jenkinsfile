@@ -289,18 +289,17 @@ stage('Checkout') {
             }
         }
 
-            stage('Debug variables') {
-      steps {
-        sh '''
-          echo "Branch: $GIT_REF"
-          echo "Repo: $REPO_NAME"
-          echo "URL: $REPO_URL"
-          echo "Pusher: $PUSHER"
-          echo "Commit: $COMMIT_ID"
-          echo "Mensaje: $COMMIT_MSG"
-        '''
-      }
-    }
+stage('Debug variables') {
+  steps {
+    sh '''
+      echo "Branch: $GIT_REF"
+      echo "Repo URL: $REPO_URL"
+      echo "Pusher: $PUSHER"
+      echo "Commit: $COMMIT"
+    '''
+  }
+}
+
 
 
   }
