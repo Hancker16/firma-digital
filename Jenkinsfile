@@ -18,18 +18,7 @@ pipeline {
                 deleteDir()
                 checkout scm
 
-                sh '''
-      echo "===== SCM INFO (después del checkout) ====="
-      echo "GIT_BRANCH=$GIT_BRANCH"
-      echo "GIT_COMMIT=$GIT_COMMIT"
-      echo "GIT_URL=$GIT_URL"
-      echo "BRANCH_NAME=$BRANCH_NAME"
-      echo "CHANGE_ID=$CHANGE_ID"
-      echo "=========================================="
-      git rev-parse HEAD || true
-      git log -1 --oneline || true
-      git remote -v || true
-    '''
+                echo "Branch Name (env.BRANCH_NAME): ${env.BRANCH_NAME}"
                 sh 'rm -rf .scannerwork || true'
                 echo '[OK] Código listo.'
             }
