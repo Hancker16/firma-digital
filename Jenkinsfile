@@ -21,7 +21,7 @@ pipeline {
         ],
         token: 'hava-jenkins-2026-9xQ2pL',
         printContributedVariables: true,
-        printPostContent: false,   // ✅ NO imprime el JSON completo
+        printPostContent: false,   
         causeString: 'Push by $PUSHER'
     )
     }
