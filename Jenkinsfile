@@ -262,16 +262,21 @@ pipeline {
             }
         }
 
-        stage('Todos el json del webhook de github') {
-            steps {
-                sh '''
-                set -e
-                echo "[INFO] Mostrando el JSON del webhook de GitHub..."
-                echo "$GITHUB_WEBHOOK_PAYLOAD" || true
-                echo "[OK] JSON mostrado."
-                '''
-            }
+stage('Debug GitHub Webhook Payload') {
+  steps {
+    sh '''
+      echo "================= GITHUB WEBHOOK PAYLOAD ================="
+      echo "GIT_BRANCH=$GIT_BRANCH"
+      echo "GIT_COMMIT=$GIT_COMMIT"
+      echo "GIT_URL=$GIT_URL"
+      echo "GIT_COMMITTER_NAME=$GIT_COMMITTER_NAME"
+      echo "GIT_COMMITTER_EMAIL=$GIT_COMMITTER_EMAIL"
+      echo "GIT_AUTHOR_NAME=$GIT_AUTHOR_NAME"
+      echo "GIT_AUTHOR_EMAIL=$GIT_AUTHOR_EMAIL"
+      echo "==========================================================="
+    '''
+  }
+}
 
-        }
   }
 }
